@@ -1,0 +1,18 @@
+package:
+  name: apb_uart_sv
+  authors:
+    - "ETH Zurich and University of Bologna"
+
+dependencies: {}
+
+sources:
+  # Source files grouped in levels. Files in level 0 have no dependencies on
+  # files in this package. Files in level 1 only depend on files in level 0,
+  # etc. Files within a level are ordered alphabetically.
+  # Level 0
+  - src/io_generic_fifo.sv
+  - src/uart_interrupt.sv
+  - src/uart_rx.sv
+  - src/uart_tx.sv
+  # Level 1
+  - src/apb_uart_sv.sv
