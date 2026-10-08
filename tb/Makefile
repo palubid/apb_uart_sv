@@ -11,7 +11,10 @@ LOGS_DIR 										:= $(TB_DIR)/logs
 SIM_DIR 										:= $(TB_DIR)/sim
 
 # TB source files
-TB_SRCS 										:= $(TB_DIR)/sv/tb.sv
+TB_SRCS 										:= \
+	$(TB_DIR)/sv/apb_if.sv \
+	$(TB_DIR)/sv/apb_master_bfm_pkg.sv \
+	$(TB_DIR)/sv/tb.sv
 
 ###############################################################################
 ## Simulation options
@@ -58,7 +61,7 @@ all_dirs: $(LOGS_DIR) $(SIM_DIR)
 all: run-questa
 
 ## QuestaSim compile: DUT file list + TB, then elaborate into $(QUESTA_TOP_OPT)
-$(SIM_DIR)/$(QUESTA_LIB)/$(QUESTA_TOP_OPT): $(FLIST) | $(LOGS_DIR) $(SIM_DIR)
+$(SIM_DIR)/$(QUESTA_LIB)/$(QUESTA_TOP_OPT): $(FLIST) $(TB_SRCS) | $(LOGS_DIR) $(SIM_DIR)
 	cd $(SIM_DIR) && $(VLIB) $(QUESTA_LIB)
 	cd $(SIM_DIR) && $(VLOG) \
 		$(VLOG_OPTS) \
