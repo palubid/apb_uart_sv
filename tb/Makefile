@@ -36,7 +36,7 @@ VOPT_OPTS := \
 	-work $(QUESTA_LIB)
 
 ifdef DEBUG
-	VSIM_RUN_OPTS	:= -do "log -r /*" -do $(TB_DIR)/tcl/questa.tcl -do "run -all" -do "wave zoom full"
+	VSIM_RUN_OPTS	:= -do "$(TB_DIR)/tcl/questa_dbg.do"
 	VOPT_OPTS 		+= -debugdb +access +r
 else
 	VSIM_RUN_OPTS := -c -do "run -all; quit"
