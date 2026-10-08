@@ -42,8 +42,8 @@ VOPT_OPTS := \
 	-work $(QUESTA_LIB)
 
 ifdef DEBUG
-	VOPT_OPTS 		+= -debugdb +access +r
-	VSIM_RUN_OPTS	:= -do "$(TB_DIR)/tcl/questa_dbg.do"
+	VOPT_OPTS 		+= -debugdb +acc
+	VSIM_RUN_OPTS	:= -debugdb -do "$(TB_DIR)/tcl/questa_dbg.do" -wlf "$(SIM_DIR)/$(TEST).wlf"
 else
 	VSIM_RUN_OPTS := -c -do "run -all; quit"
 endif
@@ -74,18 +74,25 @@ $(SIM_DIR)/$(QUESTA_LIB)/$(QUESTA_TOP_OPT): $(FLIST) $(TB_SRCS) | $(LOGS_DIR) $(
 		$(VLOG_OPTS) \
 		-f $(FLIST) \
 		$(TB_SRCS) \
-		-l $(LOGS_DIR)/questa_compile.log
+		-l $(LOGS_DIR)/vlog.log
 	cd $(SIM_DIR) && $(VOPT) \
 		$(VOPT_OPTS) \
 		$(TB_TOP) \
-		-o $(QUESTA_TOP_OPT)
+		-o $(QUESTA_TOP_OPT) \
+		-l $(LOGS_DIR)/vopt.log
 
 ## QuestaSim run: load the elaborated design and run to completion
 run-questa: $(SIM_DIR)/$(QUESTA_LIB)/$(QUESTA_TOP_OPT) | $(LOGS_DIR) $(SIM_DIR)
 	cd $(SIM_DIR) && $(VSIM) \
 		$(QUESTA_LIB).$(QUESTA_TOP_OPT) \
 		$(VSIM_RUN_OPTS) \
-		-l $(LOGS_DIR)/questa_sim__.log
+		-l $(LOGS_DIR)/vsim__$(TEST).log
+
+waves: | $(LOGS_DIR) $(SIM_DIR)
+	test -f "$(SIM_DIR)/$(TEST).wlf" || (echo "Waveform file not found! Run the simulation first." && exit 1)
+	cd $(SIM_DIR) && $(VSIM) \
+		-view "$(SIM_DIR)/$(TEST).wlf" -do "$(TB_DIR)/tcl/questa_waves.tcl"
+
 
 clean-sim:
 	rm -rf $(SIM_DIR)/*
