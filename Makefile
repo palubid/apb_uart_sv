@@ -25,6 +25,7 @@ BENDER ?= bender
 VLIB ?= vlib
 VLOG ?= vlog
 VOPT ?= vopt
+VSIM ?= vsim
 
 # Top module to elaborate
 TOP ?= apb_uart_sv
@@ -56,7 +57,7 @@ help:
 #----------------------------------------------------------------------
 # 1. Generate the file list via bender, rebased to $${UART_ROOT}
 #----------------------------------------------------------------------
-$(FLIST): Bender.yml
+$(FLIST):
 	@echo ">> bender script flist-plus -> $@"
 	cd $(UART_ROOT) && $(BENDER) script flist-plus $(BENDER_TARGETS) \
 	  | sed -E 's#$(UART_ROOT)#$${UART_ROOT}#g' > $@
