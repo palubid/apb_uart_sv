@@ -16,6 +16,10 @@ TB_SRCS 										:= \
 	$(TB_DIR)/sv/apb_master_bfm_pkg.sv \
 	$(TB_DIR)/sv/tb.sv
 
+# Test selection
+CLK_PERIOD			?= 10
+TEST 						:= test_smoke
+
 ###############################################################################
 ## Simulation options
 ###############################################################################
@@ -24,6 +28,8 @@ QUESTA_TOP_OPT  := $(TB_TOP)_opt
 
 QUESTA_INCDIRS := \
 	+incdir+$(TB_DIR)/sv
+
+QUESTA_DEFINES := +define+CLK_PERIOD=$(CLK_PERIOD)
 
 VLOG_OPTS := \
 	-sv \
@@ -36,11 +42,12 @@ VOPT_OPTS := \
 	-work $(QUESTA_LIB)
 
 ifdef DEBUG
-	VSIM_RUN_OPTS	:= -do "$(TB_DIR)/tcl/questa_dbg.do"
 	VOPT_OPTS 		+= -debugdb +access +r
+	VSIM_RUN_OPTS	:= -do "$(TB_DIR)/tcl/questa_dbg.do"
 else
 	VSIM_RUN_OPTS := -c -do "run -all; quit"
 endif
+VSIM_RUN_OPTS 	+= +TESTNAME=$(TEST)
 
 ###############################################################################
 ## Targets

@@ -59,6 +59,12 @@ module tb_uart;
   );
 
   // -------------------------------------------------------------------------
+  // Include all test tasks (compiled together, selected at runtime)
+  // -------------------------------------------------------------------------
+  `include "../tests/test_smoke.sv"
+  `include "../tests/test_loopback_115200.sv"
+
+  // -------------------------------------------------------------------------
   // Clock & Reset Generation
   // -------------------------------------------------------------------------
 
@@ -80,15 +86,21 @@ module tb_uart;
   end
 
   initial begin : main_simulation
-    apb_resp_e         resp;
-    logic [31:0]       rdata;
+    string test_name;
 
-    // UART register offsets (word-addressed register file, PADDR[2:0])
-    localparam logic [APB_ADDR_WIDTH-1:0] LCR = 12'h3;
-    localparam logic [APB_ADDR_WIDTH-1:0] IER = 12'h1;
+    // ---- Parse plusargs ----
+    if (!$value$plusargs("TESTNAME=%s",  test_name))   test_name   = "test_smoke";
+
+    $display("");
+    $display("===========================================================");
+    $display(" APB UART BFM SV Testbench");
+    $display("  Test     : %s", test_name);
+    $display("===========================================================");
+    $display("");
 
     rx_i = 1'b1; // UART idle line is high
 
+    // construct BFM instance
     bfm = new(apb_if_inst);
     bfm.init();
 
@@ -96,24 +108,12 @@ module tb_uart;
     wait (resetn === 1'b1);
     repeat(2) @(posedge clk);
 
-    // Baseline back-to-back transfers.
-    bfm.write(LCR, 32'h0000_0083, resp); // set DLAB + 8-bit word length
-    $display("[%0t] WRITE LCR resp=%s", $time, resp.name());
-    bfm.read (LCR, rdata, resp);
-    $display("[%0t] READ  LCR = 0x%08x resp=%s", $time, rdata, resp.name());
-
-    // Exercise idle throttling (gap before SETUP phase).
-    bfm.idle_mode = 1;
-    bfm.write(IER, 32'h0000_0001, resp);
-    bfm.read (IER, rdata, resp);
-    $display("[%0t] READ  IER = 0x%08x resp=%s (idle_mode)", $time, rdata, resp.name());
-    bfm.idle_mode = 0;
-
-    // Exercise backpressure throttling (SETUP-to-ACCESS stall).
-    bfm.backpressure_mode = 1;
-    bfm.read (LCR, rdata, resp);
-    $display("[%0t] READ  LCR = 0x%08x resp=%s (backpressure_mode)", $time, rdata, resp.name());
-    bfm.backpressure_mode = 0;
+    // ---- Dispatch test ----
+    case (test_name)
+      "test_smoke"           : test_smoke();
+      "test_loopback_115200" : test_loopback_115200();
+      default: $fatal(1, "[tb_sv_apb_uart] Unknown test: %s", test_name);
+    endcase
 
     repeat(10) @(posedge clk);
     $display("[%0t] Main simulation finished", $time);
