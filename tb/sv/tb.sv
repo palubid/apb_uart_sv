@@ -63,6 +63,7 @@ module tb_uart;
   // -------------------------------------------------------------------------
   `include "../tests/test_smoke.sv"
   `include "../tests/test_loopback_115200.sv"
+  `include "../tests/test_tx_fifo_fill_drain.sv"
 
   // -------------------------------------------------------------------------
   // Clock & Reset Generation
@@ -110,8 +111,9 @@ module tb_uart;
 
     // ---- Dispatch test ----
     case (test_name)
-      "test_smoke"           : test_smoke();
-      "test_loopback_115200" : test_loopback_115200();
+      "test_smoke"               : test_smoke();
+      "test_loopback_115200"     : test_loopback_115200();
+      "test_tx_fifo_fill_drain"  : test_tx_fifo_fill_drain();
       default: $fatal(1, "[tb_sv_apb_uart] Unknown test: %s", test_name);
     endcase
 
