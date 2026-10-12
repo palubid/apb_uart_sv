@@ -19,6 +19,7 @@ module apb_uart_sv
     input  logic [APB_ADDR_WIDTH-1:0] PADDR,
     /* lint_on */
     input  logic               [31:0] PWDATA,
+    input  logic                [3:0] PSTRB,
     input  logic                      PWRITE,
     input  logic                      PSEL,
     input  logic                      PENABLE,
@@ -38,7 +39,10 @@ module apb_uart_sv
     parameter TX_FIFO_DEPTH = 16; // in bytes
     parameter RX_FIFO_DEPTH = 16; // in bytes
 
-    logic [2:0]       register_adr;
+    logic [1:0]       wr_lane;
+    logic [7:0]       wr_byte;
+    logic [2:0]       wr_adr;
+    logic [7:0]       rd_b0, rd_b1, rd_b2, rd_b3;
     logic [9:0][7:0]  regs_q, regs_n;
     logic [1:0]       trigger_level_n, trigger_level_q;
 
@@ -213,17 +217,17 @@ module apb_uart_sv
 
         if (PSEL && PENABLE && PWRITE)
         begin
-            case (register_adr)
+            case (wr_adr)
 
                 THR: // either THR or DLL
                 begin
                     if (regs_q[LCR][7]) // Divisor Latch Access Bit (DLAB)
                     begin
-                        regs_n[DLL + 'd8] = PWDATA[7:0];
+                        regs_n[DLL + 'd8] = wr_byte;
                     end
                     else
                     begin
-                        fifo_tx_data = PWDATA[7:0];
+                        fifo_tx_data = wr_byte;
                         fifo_tx_valid = 1'b1;
                     end
                 end
@@ -231,19 +235,19 @@ module apb_uart_sv
                 IER: // either IER or DLM
                 begin
                     if (regs_q[LCR][7]) // Divisor Latch Access Bit (DLAB)
-                        regs_n[DLM + 'd8] = PWDATA[7:0];
+                        regs_n[DLM + 'd8] = wr_byte;
                     else
-                        regs_n[IER] = PWDATA[7:0];
+                        regs_n[IER] = wr_byte;
                 end
 
                 LCR:
-                    regs_n[LCR] = PWDATA[7:0];
+                    regs_n[LCR] = wr_byte;
 
                 FCR: // write only register, fifo control register
                 begin
-                    rx_fifo_clr_n   = PWDATA[1];
-                    tx_fifo_clr_n   = PWDATA[2];
-                    trigger_level_n = PWDATA[7:6];
+                    rx_fifo_clr_n   = wr_byte[1];
+                    tx_fifo_clr_n   = wr_byte[2];
+                    trigger_level_n = wr_byte[7:6];
                 end
 
                 default: ;
@@ -253,57 +257,60 @@ module apb_uart_sv
 
     end
 
-    // register read logic
+    // register read logic (32-bit packed)
+    //
+    // The 32-bit AXI-Lite master issues word-aligned reads and extracts the
+    // requested byte lane itself, so each byte lane must return the register
+    // at byte offset {PADDR[2], lane}. PADDR[2] selects the low (0-3) or high
+    // (4-7) register group.
     always_comb
     begin
-        PRDATA = 'b0;
-        apb_rx_ready = 1'b0;
+        PRDATA        = 'b0;
+        apb_rx_ready  = 1'b0;
         fifo_rx_ready = 1'b0;
-        clr_int      = 4'b0;
+        clr_int       = 4'b0;
+        rd_b0         = 8'b0;
+        rd_b1         = 8'b0;
+        rd_b2         = 8'b0;
+        rd_b3         = 8'b0;
 
         if (PSEL && PENABLE && !PWRITE)
         begin
-            case (register_adr)
-                RBR: // either RBR or DLL
+            if (PADDR[2] == 1'b0)
+            begin
+                // lane0: RBR/DLL, lane1: IER/DLM, lane2: IIR, lane3: LCR
+                if (regs_q[LCR][7]) // Divisor Latch Access Bit (DLAB)
                 begin
-                    if (regs_q[LCR][7]) // Divisor Latch Access Bit (DLAB)
-                        PRDATA = {24'b0, regs_q[DLL + 'd8]};
-                    else
-                    begin
-
-                        fifo_rx_ready = 1'b1;
-
-                        PRDATA = {24'b0, fifo_rx_data[7:0]};
-
-                        clr_int = 4'b1000; // clear Received Data Available interrupt
-                    end
+                    rd_b0 = regs_q[DLL + 'd8];
+                end
+                else
+                begin
+                    fifo_rx_ready = 1'b1;
+                    rd_b0         = fifo_rx_data[7:0];
+                    clr_int       = clr_int | 4'b1000; // clear Received Data Available interrupt
                 end
 
-                LSR: // Line Status Register
-                begin
-                    PRDATA = {24'b0, regs_q[LSR]};
-                    clr_int = 4'b1100; // clear parrity interrupt error
-                end
+                if (regs_q[LCR][7]) // Divisor Latch Access Bit (DLAB)
+                    rd_b1 = regs_q[DLM + 'd8];
+                else
+                    rd_b1 = regs_q[IER];
 
-                LCR: // Line Control Register
-                    PRDATA = {24'b0, regs_q[LCR]};
+                rd_b2   = {1'b1, 1'b1, 2'b0, IIR_o};
+                clr_int = clr_int | 4'b0100; // clear Transmitter Holding Register Empty
 
-                IER: // either IER or DLM
-                begin
-                    if (regs_q[LCR][7]) // Divisor Latch Access Bit (DLAB)
-                        PRDATA = {24'b0, regs_q[DLM + 'd8]};
-                    else
-                        PRDATA = {24'b0, regs_q[IER]};
-                end
+                rd_b3 = regs_q[LCR];
+            end
+            else
+            begin
+                // lane0: MCR, lane1: LSR, lane2: MSR, lane3: SCR
+                rd_b0   = regs_q[MCR];
+                rd_b1   = regs_q[LSR];
+                rd_b2   = regs_q[MSR];
+                rd_b3   = regs_q[SCR];
+                clr_int = 4'b1100; // clear parity interrupt error on LSR read
+            end
 
-                IIR: // interrupt identification register read only
-                begin
-                    PRDATA = {24'b0, 1'b1, 1'b1, 2'b0, IIR_o};
-                    clr_int = 4'b0100; // clear Transmitter Holding Register Empty
-                end
-
-                default: ;
-            endcase
+            PRDATA = {rd_b3, rd_b2, rd_b1, rd_b0};
         end
     end
 
@@ -339,7 +346,24 @@ module apb_uart_sv
         end
     end
 
-    assign register_adr = {PADDR[2:0]};
+    // 32-bit APB byte-lane steering for writes.
+    //
+    // A byte store from the 32-bit AXI-Lite master arrives as a word-aligned
+    // address plus a one-hot PSTRB selecting the active byte lane, with the
+    // data left in that lane. Recover the addressed register as
+    // {PADDR[2], lane} and right-justify the active byte.
+    always_comb
+    begin
+        unique case (PSTRB)
+            4'b0010: wr_lane = 2'd1;
+            4'b0100: wr_lane = 2'd2;
+            4'b1000: wr_lane = 2'd3;
+            default: wr_lane = 2'd0;
+        endcase
+    end
+    assign wr_byte = PWDATA[8*wr_lane +: 8];
+    assign wr_adr  = {PADDR[2], wr_lane};
+
     // APB logic: we are always ready to capture the data into our regs
     // not supporting transfare failure
     assign PREADY  = 1'b1;
