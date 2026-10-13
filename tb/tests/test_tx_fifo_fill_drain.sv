@@ -49,7 +49,7 @@ task automatic test_tx_fifo_fill_drain();
   // Internal loopback: mirror the serial TX line onto RX. Sampling on the
   // negedge keeps rx_i stable ahead of the DUT's posedge rx synchronizer.
   fork
-    forever @(negedge clk) rx_i = tx_o;
+    forever @(negedge clk) uart_if_inst.rx = tx_o;
   join_none
 
   // Program the baud divisor behind the DLAB bit.

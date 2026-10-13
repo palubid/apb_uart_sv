@@ -7,6 +7,12 @@
  *           the cycle_pause pattern [1,1,1,0] -> a 3-cycle gap, matching the
  *           AXI master BFM throttling knobs.
  *
+ * The DUT register file is byte-addressable through the APB4 byte strobes: the
+ * selected register is {PADDR[2], one-hot(PSTRB)} and the data byte must sit in
+ * the matching PWDATA lane. The BFM takes a register offset (PADDR[2:0]) plus a
+ * data byte and performs this lane steering automatically; reads return the
+ * addressed register right-justified in bits [7:0].
+ *
  * Usage:
  *   apb_master_bfm bfm = new(apb_vif);
  *   bfm.init();                 // drive master signals to safe defaults
@@ -48,6 +54,7 @@ package apb_master_bfm_pkg;
       vif.master_cb.psel    <= 1'b0;
       vif.master_cb.penable <= 1'b0;
       vif.master_cb.pwdata  <= '0;
+      vif.master_cb.pstrb   <= '0;
     endtask
 
     // Insert 3 idle cycles (cycle_pause throttle) before the SETUP phase.
@@ -75,6 +82,11 @@ package apb_master_bfm_pkg;
       output apb_resp_e         resp
     );
       int unsigned timeout_cnt;
+      logic [1:0]  lane;
+
+      // Register offset -> byte lane within the 32-bit word. The DUT selects
+      // the register as {PADDR[2], lane} and expects the data in that lane.
+      lane = addr[1:0];
 
       @(vif.master_cb);
       idle_pause();
@@ -82,7 +94,14 @@ package apb_master_bfm_pkg;
       // SETUP phase: assert psel, drive address/control, penable stays low.
       vif.master_cb.paddr   <= addr;
       vif.master_cb.pwrite  <= write_en;
-      vif.master_cb.pwdata  <= write_en ? wdata : '0;
+      if (write_en) begin
+        vif.master_cb.pwdata <= (wdata & 'hFF) << (8*lane);
+        vif.master_cb.pstrb  <= (DATA_W/8)'(1 << lane);
+      end
+      else begin
+        vif.master_cb.pwdata <= '0;
+        vif.master_cb.pstrb  <= '0;
+      end
       vif.master_cb.psel    <= 1'b1;
       vif.master_cb.penable <= 1'b0;
 
@@ -101,13 +120,15 @@ package apb_master_bfm_pkg;
           $fatal(1, "[apb_master_bfm] TIMEOUT waiting for pready");
       end
 
-      rdata = vif.master_cb.prdata;
+      // Extract the addressed register from its byte lane, right-justified.
+      rdata = (vif.master_cb.prdata >> (8*lane)) & 'hFF;
       resp  = apb_resp_e'(vif.master_cb.pslverr);
 
       // End the transfer: deassert psel/penable for at least one idle cycle.
       vif.master_cb.psel    <= 1'b0;
       vif.master_cb.penable <= 1'b0;
       vif.master_cb.pwrite  <= 1'b0;
+      vif.master_cb.pstrb   <= '0;
     endtask
 
     // -----------------------------------------------------------------------

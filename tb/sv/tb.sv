@@ -4,6 +4,7 @@
 module tb_uart;
 
   import apb_master_bfm_pkg::*;
+  import uart_tx_model_pkg::*;
 
   // -------------------------------------------------------------------------
   // Local Parameters
@@ -19,7 +20,6 @@ module tb_uart;
   logic clk;
   logic resetn;
 
-  logic rx_i;
   logic tx_o;
   logic event_o;
 
@@ -33,6 +33,16 @@ module tb_uart;
   );
 
   apb_master_bfm #(.ADDR_W(APB_ADDR_WIDTH), .DATA_W(32)) bfm;
+
+  // -------------------------------------------------------------------------
+  // UART serial line + external TX model
+  //   uart_if.rx is the line driven into the DUT receiver (rx_i). The
+  //   uart_tx_model serializes bytes onto it to emulate an external device.
+  // -------------------------------------------------------------------------
+
+  uart_if uart_if_inst (.clk(clk));
+
+  uart_tx_model utx;
 
   // -------------------------------------------------------------------------
   // DUT (Device Under Test) Signals
@@ -49,11 +59,12 @@ module tb_uart;
     .PENABLE        ( apb_if_inst.penable     ),
     .PWRITE         ( apb_if_inst.pwrite      ),
     .PWDATA         ( apb_if_inst.pwdata      ),
+    .PSTRB          ( apb_if_inst.pstrb       ),
     .PRDATA         ( apb_if_inst.prdata      ),
     .PREADY         ( apb_if_inst.pready      ),
     .PSLVERR        ( apb_if_inst.pslverr     ),
     // UART Interface Signals
-    .rx_i           ( rx_i                    ),
+    .rx_i           ( uart_if_inst.rx         ),
     .tx_o           ( tx_o                    ),
     .event_o        ( event_o                 )
   );
@@ -64,6 +75,7 @@ module tb_uart;
   `include "../tests/test_smoke.sv"
   `include "../tests/test_loopback_115200.sv"
   `include "../tests/test_tx_fifo_fill_drain.sv"
+  `include "../tests/test_rx_bytes.sv"
 
   // -------------------------------------------------------------------------
   // Clock & Reset Generation
@@ -99,11 +111,14 @@ module tb_uart;
     $display("===========================================================");
     $display("");
 
-    rx_i = 1'b1; // UART idle line is high
+    uart_if_inst.rx = 1'b1; // UART idle line is high
 
     // construct BFM instance
     bfm = new(apb_if_inst);
     bfm.init();
+
+    // construct the external UART TX model (drives the DUT rx line)
+    utx = new(uart_if_inst);
 
     // Hold until reset is released.
     wait (resetn === 1'b1);
@@ -114,6 +129,7 @@ module tb_uart;
       "test_smoke"               : test_smoke();
       "test_loopback_115200"     : test_loopback_115200();
       "test_tx_fifo_fill_drain"  : test_tx_fifo_fill_drain();
+      "test_rx_bytes"            : test_rx_bytes();
       default: $fatal(1, "[tb_sv_apb_uart] Unknown test: %s", test_name);
     endcase
 

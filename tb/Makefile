@@ -14,6 +14,8 @@ SIM_DIR 										:= $(TB_DIR)/sim
 TB_SRCS 										:= \
 	$(TB_DIR)/sv/apb_if.sv \
 	$(TB_DIR)/sv/apb_master_bfm_pkg.sv \
+	$(TB_DIR)/sv/uart_if.sv \
+	$(TB_DIR)/sv/uart_tx_model_pkg.sv \
 	$(TB_DIR)/sv/tb.sv
 
 # Test selection

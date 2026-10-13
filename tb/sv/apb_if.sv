@@ -21,6 +21,7 @@ interface apb_if #(
   logic                psel;
   logic                penable;
   logic [DATA_W-1:0]   pwdata;
+  logic [DATA_W/8-1:0] pstrb;   // byte-lane write strobes (APB4)
 
   // Slave-sourced response signals
   logic [DATA_W-1:0]   prdata;
@@ -34,7 +35,7 @@ interface apb_if #(
   // ---------------------------------------------------------------------------
   clocking master_cb @(posedge pclk);
     default input #1step output #1;
-    output paddr, pwrite, psel, penable, pwdata;
+    output paddr, pwrite, psel, penable, pwdata, pstrb;
     input  prdata, pready, pslverr;
   endclocking
 
@@ -44,14 +45,14 @@ interface apb_if #(
   // Master modport: a module-based master drives the request signals directly.
   modport master (
     input  pclk, presetn,
-    output paddr, pwrite, psel, penable, pwdata,
+    output paddr, pwrite, psel, penable, pwdata, pstrb,
     input  prdata, pready, pslverr
   );
 
   // Slave modport: a module-based slave drives the response signals.
   modport slave (
     input  pclk, presetn,
-    input  paddr, pwrite, psel, penable, pwdata,
+    input  paddr, pwrite, psel, penable, pwdata, pstrb,
     output prdata, pready, pslverr
   );
 
