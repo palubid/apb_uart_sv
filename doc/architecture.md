@@ -142,7 +142,7 @@ comparison against the RX FIFO fill level:
 | `2'b10`                      | 8                            |
 | `2'b11`                      | 14                           |
 
-Inputs include `IER_i` (`IER[2:0]`), `RDA_i` (`LSR[5]`), `error_i` (`LSR[2]`),
+Inputs include `IER_i` (`IER[2:0]`), `RDA_i` (`LSR[0]`, RX data ready), `error_i` (`LSR[2]`),
 `rx_elements_i`, `tx_elements_i`, `trigger_level_i`, and the one‑hot `clr_int_i`
 interrupt‑clear vector produced by register reads.
 
