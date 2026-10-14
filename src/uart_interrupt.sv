@@ -68,8 +68,10 @@ module uart_interrupt
         // Receiver line status interrupt on: Overrun error, parity error, framing error or break interrupt
         if (IER_i[2] & error_i)
             iir_n = 4'b1100;
-        // Received data available or trigger level reached in FIFO mode
-        else if (IER_i[0] & (trigger_level_reached | RDA_i))
+        // Received data available or trigger level reached in FIFO mode. A read
+        // of RBR (clr_int_i[3]) takes priority for that cycle so the interrupt
+        // can drop once the FIFO is drained; it re-asserts while data remains.
+        else if (IER_i[0] & (trigger_level_reached | RDA_i) & ~clr_int_i[3])
             iir_n = 4'b1000;
         // Character timeout indication
         else if (IER_i[0] & CTI_i)
@@ -77,6 +79,10 @@ module uart_interrupt
         // Transmitter holding register empty
         else if (IER_i[1] & tx_elements_i == 0)
             iir_n = 4'b0100;
+
+        // No pending source left: return to the idle code (IIR[0] = 1 -> no interrupt)
+        if (iir_n[3:2] == 2'b00)
+            iir_n = 4'b0001;
     end
 
 

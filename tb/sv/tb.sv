@@ -34,6 +34,9 @@ module tb_uart;
 
   apb_master_bfm #(.ADDR_W(APB_ADDR_WIDTH), .DATA_W(32)) bfm;
 
+  // UART interrupt output -> BFM (sampled through the APB interface)
+  assign apb_if_inst.irq = event_o;
+
   // -------------------------------------------------------------------------
   // UART serial line + external TX model
   //   uart_if.rx is the line driven into the DUT receiver (rx_i). The
@@ -74,6 +77,8 @@ module tb_uart;
   // -------------------------------------------------------------------------
   `include "../tests/test_smoke.sv"
   `include "../tests/test_loopback_115200.sv"
+  `include "../tests/test_loopback_115200_irq.sv"
+  `include "../tests/test_thre_interrupt.sv"
   `include "../tests/test_tx_fifo_fill_drain.sv"
   `include "../tests/test_rx_bytes.sv"
 
@@ -128,6 +133,8 @@ module tb_uart;
     case (test_name)
       "test_smoke"               : test_smoke();
       "test_loopback_115200"     : test_loopback_115200();
+      "test_loopback_115200_irq" : test_loopback_115200_irq();
+      "test_thre_interrupt"      : test_thre_interrupt();
       "test_tx_fifo_fill_drain"  : test_tx_fifo_fill_drain();
       "test_rx_bytes"            : test_rx_bytes();
       default: $fatal(1, "[tb_sv_apb_uart] Unknown test: %s", test_name);

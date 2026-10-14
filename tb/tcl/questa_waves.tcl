@@ -47,7 +47,7 @@ add wave -divider {interface}
 apb_wave_add_apb $tb apb_if_inst "APB_master"
 
 add wave -divider {uart registers}
-add wave /$tb/u_apb_uart_sv/register_adr
+add wave /$tb/u_apb_uart_sv/wr_adr
 add wave /$tb/u_apb_uart_sv/regs_q
 
 add wave -divider {uart TX}

@@ -28,6 +28,10 @@ interface apb_if #(
   logic                pready;
   logic                pslverr;
 
+  // Interrupt request from the slave (DUT event_o), active high. Not part of
+  // the APB protocol; sampled by the master BFM so tests can wait on it.
+  logic                irq;
+
   // ---------------------------------------------------------------------------
   // Master clocking block (BFM side)
   //   Sample DUT responses #1step before the edge, drive the request signals #1
@@ -36,7 +40,7 @@ interface apb_if #(
   clocking master_cb @(posedge pclk);
     default input #1step output #1;
     output paddr, pwrite, psel, penable, pwdata, pstrb;
-    input  prdata, pready, pslverr;
+    input  prdata, pready, pslverr, irq;
   endclocking
 
   // Synchronous master modport: BFM drives/samples exclusively via master_cb.
@@ -46,14 +50,14 @@ interface apb_if #(
   modport master (
     input  pclk, presetn,
     output paddr, pwrite, psel, penable, pwdata, pstrb,
-    input  prdata, pready, pslverr
+    input  prdata, pready, pslverr, irq
   );
 
   // Slave modport: a module-based slave drives the response signals.
   modport slave (
     input  pclk, presetn,
     input  paddr, pwrite, psel, penable, pwdata, pstrb,
-    output prdata, pready, pslverr
+    output prdata, pready, pslverr, irq
   );
 
 endinterface : apb_if

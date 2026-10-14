@@ -177,7 +177,7 @@ module apb_uart_sv
 
 
         .IER_i              ( regs_q[IER][2:0]              ), // interrupt enable register
-        .RDA_i              ( regs_n[LSR][5]                ), // receiver data available
+        .RDA_i              ( regs_n[LSR][0]                ), // receiver data available
         .CTI_i              ( 1'b0                          ), // character timeout indication
 
 

@@ -20,6 +20,7 @@
  *   bfm.backpressure_mode = 1;  // 3-cycle stall between SETUP and ACCESS
  *   bfm.write(addr, data, resp);
  *   bfm.read (addr, data, resp);
+ *   bfm.wait_irq();             // block until the DUT interrupt (irq) is high
  */
 package apb_master_bfm_pkg;
 
@@ -41,6 +42,9 @@ package apb_master_bfm_pkg;
 
     // Maximum wait cycles before $fatal (matches the AXI BFM TIMEOUT_AXI)
     int unsigned TIMEOUT_APB = 20000;
+
+    // Default maximum cycles wait_irq() waits for an interrupt before $fatal
+    int unsigned TIMEOUT_IRQ = 100000;
 
     function new(virtual apb_if #(.ADDR_W(ADDR_W), .DATA_W(DATA_W)).master_sync vif);
       this.vif = vif;
@@ -129,6 +133,22 @@ package apb_master_bfm_pkg;
       vif.master_cb.penable <= 1'b0;
       vif.master_cb.pwrite  <= 1'b0;
       vif.master_cb.pstrb   <= '0;
+    endtask
+
+    // -----------------------------------------------------------------------
+    // Interrupt wait: block until the slave's interrupt request (irq) is
+    // sampled high. Level-sensitive, so it returns immediately if irq is
+    // already asserted. The APB bus is left untouched while waiting.
+    // -----------------------------------------------------------------------
+    task automatic wait_irq(input int unsigned timeout_cycles = 0);
+      int unsigned limit = (timeout_cycles != 0) ? timeout_cycles : TIMEOUT_IRQ;
+      int unsigned cnt   = 0;
+
+      while (vif.master_cb.irq !== 1'b1) begin
+        @(vif.master_cb);
+        if (++cnt >= limit)
+          $fatal(1, "[apb_master_bfm] TIMEOUT waiting for irq");
+      end
     endtask
 
     // -----------------------------------------------------------------------
