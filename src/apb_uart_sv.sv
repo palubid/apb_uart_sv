@@ -45,6 +45,7 @@ module apb_uart_sv
     logic [7:0]       rd_b0, rd_b1, rd_b2, rd_b3;
     logic [9:0][7:0]  regs_q, regs_n;
     logic [1:0]       trigger_level_n, trigger_level_q;
+    logic             fifo_en_n, fifo_en_q;
 
     // receive buffer register, read only
     logic [7:0]       rx_data;
@@ -93,7 +94,7 @@ module apb_uart_sv
         .busy_o             (                               ),
         /* lint_on */
         .err_o              ( parity_error                  ),
-        .err_clr_i          ( 1'b1                          ),
+        .err_clr_i          ( 1'b0                          ),
         .rx_data_o          ( rx_data                       ),
         .rx_valid_o         ( rx_valid                      ),
         .rx_ready_i         ( rx_ready                      )
@@ -177,6 +178,7 @@ module apb_uart_sv
 
 
         .IER_i              ( regs_q[IER][2:0]              ), // interrupt enable register
+        .fifo_en_i          ( fifo_en_q                     ), // FCR[0]
         .RDA_i              ( regs_n[LSR][0]                ), // receiver data available
         .CTI_i              ( 1'b0                          ), // character timeout indication
 
@@ -200,6 +202,7 @@ module apb_uart_sv
     begin
         regs_n          = regs_q;
         trigger_level_n = trigger_level_q;
+        fifo_en_n       = fifo_en_q;
 
         fifo_tx_valid   = 1'b0;
         tx_fifo_clr_n   = 1'b0; // self clearing
@@ -208,8 +211,11 @@ module apb_uart_sv
         // rx status
         regs_n[LSR][0] = fifo_rx_valid; // fifo is empty
 
-        // parity error on receiving part has occured
-        regs_n[LSR][2] = fifo_rx_data[8]; // parity error is detected when element is retrieved
+        // parity error of the character currently at the RX FIFO head. Gated by
+        // fifo_rx_valid so the flag (and the derived line-status interrupt) drop
+        // once the errored byte is popped; the FIFO data bus otherwise retains
+        // the stale entry after a read.
+        regs_n[LSR][2] = fifo_rx_valid & fifo_rx_data[8];
 
         // tx status register
         regs_n[LSR][5] = ~ (|tx_elements); // fifo is empty
@@ -245,8 +251,10 @@ module apb_uart_sv
 
                 FCR: // write only register, fifo control register
                 begin
-                    rx_fifo_clr_n   = wr_byte[1];
-                    tx_fifo_clr_n   = wr_byte[2];
+                    fifo_en_n       = wr_byte[0];
+                    // changing the FIFO mode flushes both FIFOs (16550 behaviour)
+                    rx_fifo_clr_n   = wr_byte[1] | (wr_byte[0] ^ fifo_en_q);
+                    tx_fifo_clr_n   = wr_byte[2] | (wr_byte[0] ^ fifo_en_q);
                     trigger_level_n = wr_byte[7:6];
                 end
 
@@ -295,7 +303,7 @@ module apb_uart_sv
                 else
                     rd_b1 = regs_q[IER];
 
-                rd_b2   = {1'b1, 1'b1, 2'b0, IIR_o};
+                rd_b2   = {fifo_en_q, fifo_en_q, 2'b0, IIR_o};
                 clr_int = clr_int | 4'b0100; // clear Transmitter Holding Register Empty
 
                 rd_b3 = regs_q[LCR];
@@ -331,6 +339,7 @@ module apb_uart_sv
             regs_q[DLL + 'd8] <= 8'h0;
 
             trigger_level_q <= 2'b00;
+            fifo_en_q       <= 1'b0;
             tx_fifo_clr_q   <= 1'b0;
             rx_fifo_clr_q   <= 1'b0;
 
@@ -340,6 +349,7 @@ module apb_uart_sv
             regs_q <= regs_n;
 
             trigger_level_q <= trigger_level_n;
+            fifo_en_q       <= fifo_en_n;
             tx_fifo_clr_q   <= tx_fifo_clr_n;
             rx_fifo_clr_q   <= rx_fifo_clr_n;
 

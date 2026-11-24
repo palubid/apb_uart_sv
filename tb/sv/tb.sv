@@ -81,6 +81,11 @@ module tb_uart;
   `include "../tests/test_thre_interrupt.sv"
   `include "../tests/test_tx_fifo_fill_drain.sv"
   `include "../tests/test_rx_bytes.sv"
+  `include "../tests/test_rx_irq.sv"
+  `include "../tests/test_reset_values.sv"
+  `include "../tests/test_word_lengths.sv"
+  `include "../tests/test_rx_trigger_levels.sv"
+  `include "../tests/test_line_status_irq.sv"
 
   // -------------------------------------------------------------------------
   // Clock & Reset Generation
@@ -137,6 +142,11 @@ module tb_uart;
       "test_thre_interrupt"      : test_thre_interrupt();
       "test_tx_fifo_fill_drain"  : test_tx_fifo_fill_drain();
       "test_rx_bytes"            : test_rx_bytes();
+      "test_rx_irq"              : test_rx_irq();
+      "test_reset_values"        : test_reset_values();
+      "test_word_lengths"        : test_word_lengths();
+      "test_rx_trigger_levels"   : test_rx_trigger_levels();
+      "test_line_status_irq"     : test_line_status_irq();
       default: $fatal(1, "[tb_sv_apb_uart] Unknown test: %s", test_name);
     endcase
 

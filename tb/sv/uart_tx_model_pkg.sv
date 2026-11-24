@@ -71,8 +71,11 @@ package uart_tx_model_pkg;
     endtask
 
     // Transmit one byte: start bit, LSB-first data bits, optional EVEN parity,
-    // then the configured number of stop bits.
-    task automatic send_byte(input byte unsigned data);
+    // then the configured number of stop bits. When force_parity_err is set
+    // (and parity is enabled) the parity bit is inverted so the DUT receiver
+    // sees a parity mismatch, exercising the receiver-line-status path.
+    task automatic send_byte(input byte unsigned data,
+                             input bit          force_parity_err = 1'b0);
       logic parity;
 
       drive_bit(1'b0); // start bit
@@ -84,7 +87,7 @@ package uart_tx_model_pkg;
       end
 
       if (parity_en)
-        drive_bit(parity); // EVEN parity over the data bits
+        drive_bit(force_parity_err ? ~parity : parity); // EVEN parity over data bits
 
       repeat (stop_bits) drive_bit(1'b1); // stop bit(s)
     endtask

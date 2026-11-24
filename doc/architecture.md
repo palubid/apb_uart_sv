@@ -92,7 +92,7 @@ baud divisor, optional parity, and configurable data‑bit count.
 | `cfg_bits_i`      | in  | 2     | `LCR[1:0]`                                 |
 | `busy_o`          | out | 1     | unconnected                               |
 | `err_o`           | out | 1     | `parity_error`                            |
-| `err_clr_i`       | in  | 1     | `1'b1`                                     |
+| `err_clr_i`       | in  | 1     | `1'b0`                                     |
 | `rx_data_o`       | out | 8     | `rx_data` → RX FIFO                        |
 | `rx_valid_o`      | out | 1     | `rx_valid` → RX FIFO                       |
 | `rx_ready_i`      | in  | 1     | `rx_ready` from RX FIFO                    |
@@ -142,9 +142,22 @@ comparison against the RX FIFO fill level:
 | `2'b10`                      | 8                            |
 | `2'b11`                      | 14                           |
 
-Inputs include `IER_i` (`IER[2:0]`), `RDA_i` (`LSR[0]`, RX data ready), `error_i` (`LSR[2]`),
+The trigger level is only used in FIFO mode (`fifo_en_i`, FCR[0] = 1), where the
+RDA interrupt fires when the RX FIFO holds *at least* that many elements. In
+non‑FIFO mode (`fifo_en_i` = 0) the RDA interrupt fires on any received data (`RDA_i`).
+
+Inputs include `IER_i` (`IER[2:0]`), `fifo_en_i` (`FCR[0]`), `RDA_i` (`LSR[0]`, RX data ready), `error_i` (`LSR[2]`),
 `rx_elements_i`, `tx_elements_i`, `trigger_level_i`, and the one‑hot `clr_int_i`
 interrupt‑clear vector produced by register reads.
+
+`IIR_o` is recomputed every cycle from the currently active, level‑sensitive
+sources (priority: receiver line status > received data available / character
+timeout > THR empty), defaulting to the idle code `0x1`. A source that
+de‑asserts therefore retires its IIR code automatically — e.g. the
+receiver‑line‑status interrupt drops as soon as the parity‑errored byte leaves
+the RX FIFO head. `clr_int_i` only suppresses a read‑cleared source for the read
+cycle itself (an RBR read drops RDA so the FIFO can be drained below its trigger
+level).
 
 ## 4. Register Map
 
@@ -199,14 +212,15 @@ Only the low 3 bits are used (`IER[2:0]` → `uart_interrupt`):
 
 #### IIR — Interrupt Identification Register (addr `0x2`, read‑only), reset `0x01`
 
-Read value = `{2'b11, 2'b00, IIR_o[3:0]}`; i.e. bits `[7:6] = 11` (FIFOs
-enabled), bits `[5:4] = 00`, bits `[3:0] = IIR_o` from `uart_interrupt`.
+Read value = `{fifo_en, fifo_en, 2'b00, IIR_o[3:0]}`; i.e. bits `[7:6] = 11` when
+FIFO mode is enabled (FCR[0] = 1) and `00` otherwise, bits `[5:4] = 00`, bits `[3:0] = IIR_o` from `uart_interrupt`.
 Reading IIR clears the *THR‑empty* interrupt (`clr_int = 4'b0100`).
 
 #### FCR — FIFO Control Register (addr `0x2`, write‑only)
 
 | Bit   | Function                                              |
 | ----- | ----------------------------------------------------- |
+| 0     | FIFO enable (`fifo_en_q`, reset 0). Changing it flushes both FIFOs. |
 | 1     | RX FIFO clear (self‑clearing pulse `rx_fifo_clr_n`).  |
 | 2     | TX FIFO clear (self‑clearing pulse `tx_fifo_clr_n`).  |
 | 7:6   | RX interrupt trigger level (`trigger_level_n`).       |
@@ -225,12 +239,14 @@ Reading IIR clears the *THR‑empty* interrupt (`clr_int = 4'b0100`).
 | Bit | Function                                                      |
 | --- | ------------------------------------------------------------ |
 | 0   | Data Ready — RX FIFO has data (`fifo_rx_valid`).             |
-| 2   | Parity Error of the retrieved RX element (`fifo_rx_data[8]`).|
+| 2   | Parity Error of the character at the RX FIFO head (`fifo_rx_valid & fifo_rx_data[8]`); clears when that byte is read out.|
 | 5   | THR Empty — TX FIFO empty (`~|tx_elements`).                 |
 | 6   | Transmitter Empty — TX FIFO and shifter empty.              |
 
 Reset value `0x60` sets bits 5 and 6 (transmitter empty at reset). Reading LSR
-clears the parity/line‑status interrupt (`clr_int = 4'b1100`).
+emits a `clr_int = 4'b1100` acknowledge pulse; because the parity/line‑status
+source is level‑sensitive on the FIFO head, the line‑status interrupt actually
+retires once the errored byte is popped from the RX FIFO.
 
 #### MCR, MSR, SCR
 

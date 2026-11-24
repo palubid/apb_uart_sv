@@ -93,7 +93,7 @@ run-questa: $(SIM_DIR)/$(QUESTA_LIB)/$(QUESTA_TOP_OPT) | $(LOGS_DIR) $(SIM_DIR)
 waves: | $(LOGS_DIR) $(SIM_DIR)
 	test -f "$(SIM_DIR)/$(TEST).wlf" || (echo "Waveform file not found! Run the simulation first." && exit 1)
 	cd $(SIM_DIR) && $(VSIM) \
-		-view "$(SIM_DIR)/$(TEST).wlf" -do "$(TB_DIR)/tcl/questa_waves.tcl"
+		-view "$(SIM_DIR)/$(TEST).wlf" -do "$(TB_DIR)/tcl/questa_waves.tcl" -do "wave zoom full"
 
 
 clean-sim:

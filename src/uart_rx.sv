@@ -121,23 +121,19 @@ module uart_rx (
                     if (reg_bit_count == s_target_bits)
                     begin
                         reg_bit_count_next = 'h0;
-                        NS = SAVE_DATA;
+                        // Check parity (if enabled) before committing the byte
+                        // so the frame's parity-error flag is written into the
+                        // RX FIFO alongside the data it belongs to.
+                        if (cfg_parity_en_i)
+                            NS = PARITY;
+                        else
+                            NS = SAVE_DATA;
                     end
                     else
                     begin
                         reg_bit_count_next = reg_bit_count + 1;
                     end
                 end
-            end
-            SAVE_DATA:
-            begin
-                baudgen_en = 1'b1;
-                rx_valid_o = 1'b1;
-                if(rx_ready_i)
-                    if (cfg_parity_en_i)
-                        NS = PARITY;
-                    else
-                        NS = STOP_BIT;
             end
             PARITY:
             begin
@@ -146,8 +142,15 @@ module uart_rx (
                 begin
                     if(parity_bit != reg_rx_sync[2])
                         set_error = 1'b1;
-                    NS = STOP_BIT;
+                    NS = SAVE_DATA;
                 end
+            end
+            SAVE_DATA:
+            begin
+                baudgen_en = 1'b1;
+                rx_valid_o = 1'b1;
+                if(rx_ready_i)
+                    NS = STOP_BIT;
             end
             STOP_BIT:
             begin
@@ -235,23 +238,23 @@ module uart_rx (
         end
     end
 
+    // Per-byte parity error flag. It is cleared at the start of every frame and
+    // set when the PARITY state detects a mismatch, so it is valid while the
+    // byte is committed in SAVE_DATA and is captured into the RX FIFO with the
+    // data it describes. err_clr_i provides an optional external clear.
     always_ff @(posedge clk_i or negedge rstn_i)
     begin
         if (rstn_i == 1'b0)
         begin
             err_o <= 1'b0;
         end
-        else
+        else if (err_clr_i | start_bit)
         begin
-            if(err_clr_i)
-            begin
-                err_o <= 1'b0;
-            end
-            else
-            begin
-                if(set_error)
-                    err_o <= 1'b1;
-            end
+            err_o <= 1'b0;
+        end
+        else if (set_error)
+        begin
+            err_o <= 1'b1;
         end
     end
 
